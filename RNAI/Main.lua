@@ -59,6 +59,7 @@ function AI(myid)
 	local oid=GetV(V_OWNER,myid)
 	local msg=GetMsg(myid)
 	local rmsg=GetResMsg(myid)
+	local isHomunculus=GetV(V_HOMUNTYPE,myid)~=nil --是否為生命體
 	if(IsInit==false)then
 		AtkDis=GetV(V_ATTACKRANGE,myid)
 		IsInit=true
@@ -67,7 +68,7 @@ function AI(myid)
 		if(tb_property_exist(Skill,"id",0)==false)then
 			EnableNormalAttack=false
 		end
-		if(mytype==nil)then --傭兵
+		if(not isHomunculus)then --傭兵
 			mytype=GetV(V_MERTYPE,myid)
 			local merstr=(mytype<=10)and "arc" or ((mytype<=20) and "lan" or "swd")
 			merstr=merstr..((mytype%10==0)and "1" or "0")..(mytype%10)
@@ -115,7 +116,9 @@ function AI(myid)
 	elseif msg[1]==ATTACK_OBJECT_CMD then
 		MyState=ST_ATTACK
 		Target=msg[2]
-		TraceAI("id:"..msg[2]..",type"..GetV(V_HOMUNTYPE,msg[2]))
+		if(isHomunculus) then
+			TraceAI("id:"..msg[2]..",type"..GetV(V_HOMUNTYPE,msg[2]))
+		end
 	elseif msg[1]==SKILL_OBJECT_CMD then
 		MyState=ST_SKILL
 		UseSkillLv=msg[2]
