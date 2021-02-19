@@ -6,6 +6,7 @@ ST_ATTACK=3
 ST_SKILL=4
 ST_ATTACK_PRE=5
 --狀態廣域變數
+AITick=-1
 IsInit=false
 IsInit_t=0
 MyState=0
@@ -56,6 +57,12 @@ function isWeakTarget(t)
 	return false
 end
 function AI(myid)
+	local currentTick=GetTick()
+	if(AITick==currentTick) then
+		return
+	else
+		AITick=currentTick
+	end
 	local oid=GetV(V_OWNER,myid)
 	local msg=GetMsg(myid)
 	local rmsg=GetResMsg(myid)
@@ -82,10 +89,6 @@ function AI(myid)
 		for i,sk in ipairs(Skill) do
 			sk["range"]=(sk.id==0) and GetV(V_ATTACKRANGE,myid) or ((sk.target==2) and 100 or GetV(V_SKILLATTACKRANGE_LEVEL,myid,sk.id,sk.lv))
 		end
-	end
-	--第一秒不動作(避免過地圖斷線)
-	if(os.clock()-IsInit_t<2)then
-		return
 	end
 	--傭兵動作狀態更新
 	local mymo=GetV(V_MOTION,myid)
