@@ -18,7 +18,7 @@ UseSkillLv=0
 UseSkillDis=0
 AtkDis=1
 
-Aggr=0
+Aggr=1
 MoveCmdTime=0
 FollowCmdTime=0
 MyMotion=0
@@ -86,6 +86,12 @@ function AI(myid)
 				dofile(merstr)
 			end
 		end
+		for i,sMode in ipairs(SearchMode) do
+			if(SearchSetting==sMode) then
+				Aggr=i
+				break
+			end
+		end
 		for i,sk in ipairs(Skill) do
 			sk["range"]=(sk.id==0) and GetV(V_ATTACKRANGE,myid) or ((sk.target==2) and 100 or GetV(V_SKILLATTACKRANGE_LEVEL,myid,sk.id,sk.lv))
 		end
@@ -108,8 +114,8 @@ function AI(myid)
 		--TraceAI("bestTarget:"..bestTarget)
 		local t=GetTick()
 		if(t-FollowCmdTime<500)then
-			Aggr=(Aggr+1)%2
-			SearchSetting=SearchMode[Aggr+1]
+			Aggr=Aggr%#SearchMode+1
+			SearchSetting=SearchMode[Aggr]
 		end
 		FollowCmdTime=t
 		MyState=ST_FOLLOW
