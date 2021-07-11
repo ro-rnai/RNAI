@@ -202,6 +202,11 @@ function AI(myid)
 						end
 					elseif(v.target==1 and getObjRectDis(oid,myid)<=GetV(V_SKILLATTACKRANGE_LEVEL,myid,v.id,v.lv))then
 						SkillObject(myid,v.lv,v.id,oid)
+						Skill[i].count=Skill[i].count+1
+						if(Skill[i].count>=v.times)then
+							Skill[i].count=0
+							Skill[i].stemp=cur_t
+						end
 					end
 					break
 				end
