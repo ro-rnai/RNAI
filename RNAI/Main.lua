@@ -8,7 +8,6 @@ ST_ATTACK_PRE=5
 --狀態廣域變數
 AITick=-1
 IsInit=false
-IsInit_t=0
 MyState=0
 DestX=0
 DestY=0
@@ -56,6 +55,75 @@ function isWeakTarget(t)
 	end
 	return false
 end
+
+-- function log_var(s, v)
+-- 	local t=type(v)
+-- 	if(t=="string")then
+-- 		TraceAI(s.."[string]"..v)
+-- 	elseif(t=="boolen")then
+-- 		TraceAI(s.."["..t.."]"..(v and "True" or "False"))
+-- 	else
+-- 		TraceAI(s.."["..t.."]")
+-- 	end
+-- end
+
+function getSepcFilename(myid)
+    local t = GetV(V_HOMUNTYPE, myid)
+    local d = "./AI/USER_AI/RNAI/custom/"
+    if (t ~= nil) then
+        -- 生命體
+        if t < 48 then
+            local arr = {"lif", "amistr", "filir", "vanilmirth"}
+            t = d .. arr[(t - 1) % 4 + 1] .. ".lua"
+        else
+            local arr = {"eira", "bayeri", "sera", "dieter", "eleanor"}
+            t = d .. arr[(t - 48) % 5 + 1] .. ".lua"
+        end
+    else
+        -- 傭兵
+        t = GetV(V_MERTYPE, myid) - 1
+        if (t ~= 0) then
+            -- 一般 NPC 傭兵
+            t = d .. ((t < 10) and "arc" or (t < 20 and "lan" or "swd")) .. (t % 10 == 9 and "" or "0") .. (t % 10 + 1) .. ".lua"
+        else
+            -- 商城傭兵、1等弓
+            local arr = {
+                {256, 200, "arc01"}, -- 1等弓傭兵
+                {8614, 220, "wander_man"}, -- 邪骸浪人
+                {6157, 256, "wicked_nymph"}, -- 妖仙女
+                {9815, 234, "kasa_tiger"}, -- 火鳥/虎王
+                {9517, 260, "salamander"}, -- 火蜥蜴
+                {14493, 243, "teddy_bear"}, -- 玩偶熊
+                {6120, 182, "mimic"}, -- 邪惡箱
+                {7543, 180, "disguise"}, -- 假面鬼
+                {10000, 221, "alice"} -- 愛麗絲女僕
+            }
+            local mhp = GetV(V_MAXHP, myid)
+            local msp = GetV(V_MAXSP, myid)
+            local fitName = false
+            for i, a in ipairs(arr) do
+                for j = 0, 5 do
+                    local hp = a[1] * (1 + j / 20)
+                    if (mhp <= hp and hp < mhp + 1) then
+                        for k = 0, 5 do
+                            local sp = a[2] * (1 + k / 20)
+                            if (msp <= sp and sp < msp + 1) then
+                                fitName = a[3]
+                                break
+                            end
+                        end
+                    end
+                    if (fitName ~= false) then break end
+                end
+                if (fitName ~= false) then break end
+            end
+            if (fitName == false) then return false end
+            t = d .. fitName .. ".lua"
+        end
+    end
+    return t
+end
+
 function AI(myid)
 	local currentTick=GetTick()
 	if(AITick==currentTick) then
@@ -70,21 +138,15 @@ function AI(myid)
 	if(IsInit==false)then
 		AtkDis=GetV(V_ATTACKRANGE,myid)
 		IsInit=true
-		IsInit_t=os.clock()
 		local mytype=GetV(V_HOMUNTYPE,myid)
 		if(tb_property_exist(Skill,"id",0)==false)then
 			EnableNormalAttack=false
 		end
-		if(not isHomunculus)then --傭兵
-			mytype=GetV(V_MERTYPE,myid)
-			local merstr=(mytype<=10)and "arc" or ((mytype<=20) and "lan" or "swd")
-			merstr=merstr..((mytype%10==0)and "1" or "0")..(mytype%10)
-			merstr="./AI/USER_AI/RNAI/"..merstr..".lua"
-			--TraceAI(merstr)
-			if(file_exist(merstr))then
-				--TraceAI("exist")
-				dofile(merstr)
-			end
+		local sepcFilename = getSepcFilename(myid)
+		-- log_var("sepcFilename = ",sepcFilename)
+		if(type(sepcFilename)=="string" and file_exist(sepcFilename))then
+			-- TraceAI("file "..sepcFilename.." exist")
+			dofile(sepcFilename)
 		end
 		for i,sMode in ipairs(SearchMode) do
 			if(SearchSetting==sMode) then
@@ -136,9 +198,9 @@ function AI(myid)
 		local MonType=GetV(V_HOMUNTYPE,Target)--Fix0000:
 		UseSkillDis=GetV(V_SKILLATTACKRANGE_LEVEL,myid,UseSkill,UseSkillLv)
 		--TraceAI("(oid,myid,sid,slv,target)="..oid..","..myid..","..UseSkill..","..UseSkillLv..","..Target..")")
-		if(MonType~=nil)then
-			--TraceAI("type="..oid..","..MonType)
-		end
+		-- if(MonType~=nil)then
+		-- 	TraceAI("type="..oid..","..MonType)
+		-- end
 		--SkillObject(myid,msg[2],msg[3],msg[4])
 	end
 	if(msg[1]==NONE_CMD)then --預約指令
