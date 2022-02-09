@@ -1,25 +1,27 @@
 -- 本檔案包含戰場物件與管理
 
-Mobs={} -- 陣列，單位資料為：{id,target,otherAtk,insight,score}
-RefreshKey=0 -- 每次呼叫RefreshData會在0跟1變換，用以判斷物件是否已經不在範圍
+Mobs={} -- 關聯陣列，key: 怪物id，value: {怪物id, 此魔物攻擊對象id, 其他人攻擊此魔物的時間, 是否在視線內(RefreshKey|-1), score}
+RefreshKey=0 -- 每次呼叫RefreshData會在0~29999變換，用以判斷物件是否已經不在範圍
 RefreshTime=0
 nOwnerEnemy=0
 nMyEnemy=0
 nRangeEnemy=0
 bestTarget=0
 
-plants={3790,1078,1079,1080,1081,1082,1083,1084}
+plantsInitFlag=false
+plants={
+	[3790]=true,
+	[1078]=true,
+	[1079]=true,
+	[1080]=true,
+	[1081]=true,
+	[1082]=true,
+	[1083]=true,
+	[1084]=true
+}
 friends={}
 others={}
 
-function IdxInMobs(id)
-	for i,v in ipairs(Mobs)do
-		if(v[1]==id)then
-			return i
-		end
-	end
-	return false
-end
 function XYInMobs(x,y)
 	local a,b
 	local Objs=GetActors()
@@ -43,29 +45,29 @@ function RefreshData(myid,oid) --更新戰場情報
 	nRangeEnemy=0
 	RefreshKey=(RefreshKey+1)%30000
 	local A=GetActors()
-	local idx,tar,isplants,isfriend
+	local idx,tar,isplants,isfriend,mobTypeId
 	others={}
 	local otar,mtar=GetV(V_TARGET,oid),GetV(V_TARGET,myid)
 	--更新Mobs的RefreshKey與Target，加入新的Mob，並把其他物件放others
 	for i,v in ipairs(A)do --for each v in A
-		isplants=false
-		for j,u in ipairs(plants)do
-			if(GetV(V_HOMUNTYPE,v)==u)then
-				isplants=true
-			end
+		mobTypeId=GetV(V_HOMUNTYPE,v)
+		--是否為植物
+		if mobTypeId~=nil and plants[mobTypeId]~=nil then
+			isplants=true
+		else
+			isplants=false
 		end
+		--
 		if(IsMonster(v)==1 and isplants==false)then
 			if(GetV(V_MOTION,v)~=MOTION_DEAD)then
-				idx=IdxInMobs(v)
-				if(idx==false)then -- 未在清單則加入
-					idx=#Mobs+1
-					Mobs[idx]={v,0,0,0}
+				if Mobs[v]==nil then -- 未在清單則加入
+					Mobs[v]={v,0,0,0}
 				end
 				--更新掃描紀錄、攻擊對象、敵人計數
-				Mobs[idx][4]=(getObjRectDis(oid,v)>14) and -1 or RefreshKey
+				Mobs[v][4]=(getObjRectDis(oid,v)>14) and -1 or RefreshKey
 				tar=GetV(V_TARGET,v)
 				if(tar>0 and IsMonster(tar)==0)then
-					Mobs[idx][2]=tar
+					Mobs[v][2]=tar
 					if(tar==myid)then
 						nMyEnemy=nMyEnemy+1
 					elseif(tar==oid)then
@@ -81,25 +83,24 @@ function RefreshData(myid,oid) --更新戰場情報
 		end
 	end
 	--刪除RefreshKey不符合的Mob(過時)
-	for i=#Mobs,1,-1 do
-		if(Mobs[i][4]~=RefreshKey)then
-			table.remove(Mobs,i)
+	for k,mobInfo in pairs(Mobs) do
+		if mobInfo[4]~=RefreshKey then
+			Mobs[k]=nil
 		end
 	end
-	--更新被其他玩家攻擊的flag
+	--更新被其他玩家攻擊的時間
 	for i,v in ipairs(others)do
 		tar=GetV(V_TARGET,v)
 		if(tar>0 and IsMonster(tar)==1)then
-			idx=IdxInMobs(tar)
-			if(idx)then
-				Mobs[idx][3]=t
+			if(Mobs[tar]~=nil)then
+				Mobs[tar][3]=t
 			end
 		end
 	end
 	local max_score,score=-10000,0
 	local d1,d2
 	bestTarget=0
-	for i,v in ipairs(Mobs)do
+	for i,v in pairs(Mobs)do
 		--更新分數
 		d1=getObjRectDis(oid,v[1])
 		d2=getObjRectDis(myid,v[1])
