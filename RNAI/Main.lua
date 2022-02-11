@@ -5,6 +5,7 @@ ST_HOLD=2
 ST_ATTACK=3
 ST_SKILL=4
 ST_ATTACK_PRE=5
+ST_SKILL_GND=6
 --狀態廣域變數
 AITick=-1
 IsInit=false
@@ -12,9 +13,14 @@ MyState=0
 DestX=0
 DestY=0
 Target=0
-UseSkill=0
-UseSkillLv=0
-UseSkillDis=0
+ManualSkill = {
+	["id"] = 0,
+	["lv"] = 0,
+	["target"] = 0,
+	["x"] = 0,
+	["y"] = 0,
+	["range"]=0
+}
 AtkDis=1
 
 Aggr=1
@@ -210,17 +216,20 @@ function AI(myid)
 			TraceAI("id:"..msg[2]..",type"..GetV(V_HOMUNTYPE,msg[2]))
 		end
 	elseif msg[1]==SKILL_OBJECT_CMD then
+		--使用鎖定目標的技能
 		MyState=ST_SKILL
-		UseSkillLv=msg[2]
-		UseSkill=msg[3]
-		Target=msg[4]
-		local MonType=GetV(V_HOMUNTYPE,Target)--Fix0000:
-		UseSkillDis=GetV(V_SKILLATTACKRANGE_LEVEL,myid,UseSkill,UseSkillLv)
-		--TraceAI("(oid,myid,sid,slv,target)="..oid..","..myid..","..UseSkill..","..UseSkillLv..","..Target..")")
-		-- if(MonType~=nil)then
-		-- 	TraceAI("type="..oid..","..MonType)
-		-- end
-		--SkillObject(myid,msg[2],msg[3],msg[4])
+		ManualSkill.lv = msg[2]
+		ManualSkill.id = msg[3]
+		ManualSkill.target = msg[4]
+		ManualSkill.range = GetV(V_SKILLATTACKRANGE_LEVEL, myid, ManualSkill.id, ManualSkill.lv)
+	elseif msg[1]==SKILL_AREA_CMD then
+		--使用地面技能
+		MyState = ST_SKILL_GND
+		ManualSkill.lv = msg[2]
+		ManualSkill.id = msg[3]
+		ManualSkill.x = msg[4]
+		ManualSkill.y = msg[5]
+		ManualSkill.range = GetV(V_SKILLATTACKRANGE_LEVEL, myid, ManualSkill.id, ManualSkill.lv)
 	end
 	if(msg[1]==NONE_CMD)then --預約指令
 		if(rmsg[1]==MOVE_CMD)then
@@ -311,32 +320,58 @@ function AI(myid)
 	--攻擊目標
 	elseif (MyState==ST_ATTACK) then
 		-- 目標消失則回到先前狀態(FOLLOW)
-		if(getObjRectDis(oid,Target)>15 or GetV(V_MOTION,Target)==MOTION_DEAD)then
+		if(Target<=0 or getObjRectDis(oid, Target)>15 or GetV(V_MOTION, Target)==MOTION_DEAD)then
 			RemoveTarget()
 			MyState=ST_FOLLOW
-		elseif(getObjRectDis(myid,Target)<=AtkDis)then --在範圍內則普攻
-			Attack(myid,Target)
-		else -- 如果距離太遠需要追擊
-			local x,y=getFreeObjRectPos(Target,myid,AtkDis,oid)
-			MoveToDest(myid,x,y)
+		else
+			-- 進入技能判定
+			if(isWeakTarget(Target))then
+				--使用普攻
+				local dis=getObjRectDis(myid,Target)
+				if(dis<=AtkDis)then
+					Attack(myid,Target)
+				end
+				if(Target>0 and getObjRectDis(oid,Target)<15)then
+					local x,y=getFreeObjRectPos(Target,myid,AtkDis,oid)
+					MoveToDest(myid,x,y)
+				end
+			else
+				--使用技能
+				local chaseDis = autoUseSkill(myid, oid, Target, 2)
+				--靠近以使用更多可能的技能
+				if(chaseDis~=false and Target>0 and getObjRectDis(oid,Target)<15)then
+					local x,y=getFreeObjRectPos(Target,myid,chaseDis,oid)
+					MoveToDest(myid,x,y)
+				end
+			end
 		end
-		-- 未來會以攻擊設定陣列決定使用普攻或是技能
 	-- 對目標使用技能
 	elseif (MyState==ST_SKILL) then
-		-- 目標消失則回到先前狀態(FOLLOW)
-		if(getObjRectDis(oid,Target)>15 or GetV(V_MOTION,Target)==MOTION_DEAD)then
-			RemoveTarget()
+		local target = ManualSkill.target
+		if(getObjRectDis(oid, target)>15 or GetV(V_MOTION, target)==MOTION_DEAD)then
 			MyState=ST_FOLLOW
-		elseif(getObjRectDis(myid,Target)<=UseSkillDis)then --在範圍內則使用技能
-			SkillObject(myid,UseSkillLv,UseSkill,Target)
-			if(IsMonster(Target)==1)then
-				MyState=ST_ATTACK
+		elseif(getObjRectDis(myid, target) <= target)then --在範圍內則使用技能
+			SkillObject(myid, ManualSkill.lv, ManualSkill.id, target)
+			if(IsMonster(target)==1)then
+				Target = target
+				MyState = ST_ATTACK
 			else
-				MyState=ST_FOLLOW
+				MyState = ST_FOLLOW
 			end
 		else -- 如果距離太遠需要追擊
-			local x,y=getFreeObjRectPos(Target,myid,UseSkillDis,oid)
-			MoveToDest(myid,x,y)
+			local x,y=getFreeObjRectPos(target, myid, ManualSkill.range, oid)
+			MoveToDest(myid, x, y)
+		end
+	-- 對地面使用技能
+	elseif (MyState==ST_SKILL_GND) then
+		local x,y = GetV(V_POSITION, myid)
+		local dis = getRectDis(x, y, ManualSkill.x, ManualSkill.y)
+		if(dis <= ManualSkill.range) then --在範圍內則使用技能
+			SkillGround(myid, ManualSkill.lv, ManualSkill.id, ManualSkill.x, ManualSkill.y)
+			MyState=ST_FOLLOW
+		else -- 如果距離太遠需要追擊
+			x,y=getRectPos(ManualSkill.x, ManualSkill.y, x, y, ManualSkill.range)
+			MoveToDest(myid, x, y)
 		end
 	end
 end
