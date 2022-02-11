@@ -33,6 +33,12 @@ function XYInMobs(x,y)
 	end
 	return false
 end
+function RemoveTarget()
+	if bestTarget~=0 and Mobs[bestTarget]~=nil then
+		Mobs[bestTarget] = nil
+	end
+	bestTarget = 0
+end
 function RefreshData(myid,oid) --更新戰場情報
 	local t=GetTick()
 	if(t-RefreshTime>333)then --每1/3秒更新一次，降低計算消耗

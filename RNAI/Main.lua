@@ -56,16 +56,22 @@ function isWeakTarget(t)
 	return false
 end
 
--- function log_var(s, v)
--- 	local t=type(v)
--- 	if(t=="string")then
--- 		TraceAI(s.."[string]"..v)
--- 	elseif(t=="boolen")then
--- 		TraceAI(s.."["..t.."]"..(v and "True" or "False"))
--- 	else
--- 		TraceAI(s.."["..t.."]")
--- 	end
--- end
+function log_var(arr)
+	local s = ""
+	for i,v in ipairs(arr) do
+		local t=type(v)
+		if(t=="string")then
+			s = s..v.." "
+		elseif(t=="boolen")then
+			s = s..(v and "True" or "False").." "
+		elseif(v==nil)then
+			s = s.."[nil] "
+		elseif(t=="number")then
+			s = s..v.." "
+		end
+	end
+	TraceAI(s)
+end
 
 function getSepcFilename(myid)
     local t = GetV(V_HOMUNTYPE, myid)
@@ -155,7 +161,20 @@ function AI(myid)
 			end
 		end
 		for i,sk in ipairs(Skill) do
-			sk["range"]=(sk.id==0) and GetV(V_ATTACKRANGE,myid) or ((sk.target==2) and 100 or GetV(V_SKILLATTACKRANGE_LEVEL,myid,sk.id,sk.lv))
+			if sk["range"]==nil then
+				if sk.id==0 then
+					sk["range"]=GetV(V_ATTACKRANGE,myid)
+				elseif sk.target==2 then
+					sk["range"]=100
+				elseif sk.castType==0 then
+					sk["range"] = (sk["effectArea"] - 1) / 2
+				else
+					sk["range"]=GetV(V_SKILLATTACKRANGE_LEVEL,myid,sk.id,sk.lv)
+				end
+			end
+		end
+		for i,sk in ipairs(Skill) do --Trace 各技能 range 資訊
+			TraceAI("id="..sk.id..", lv="..sk.lv..", range="..sk.range..", V_SKILLATTACKRANGE_LEVEL:"..GetV(V_SKILLATTACKRANGE_LEVEL,myid,sk.id,sk.lv)..", V_SKILLATTACKRANGE:"..GetV(V_SKILLATTACKRANGE,myid,sk.id))
 		end
 	end
 	--傭兵動作狀態更新
@@ -249,34 +268,11 @@ function AI(myid)
 		end
 	--跟隨
 	elseif (MyState==ST_FOLLOW) then
-		--if(Aggr==1)then
-			-- 常駐技能使用
-			local cur_t=GetTick()
-			local sp=GetV(V_SP,myid)/GetV(V_MAXSP,myid)*100
-			for i,v in ipairs(Skill) do
-				if(v.when~=1 and cur_t-v.stemp>=v.delay and v.sp[1]<=sp and sp<=v.sp[2] and nOwnerEnemy>=v.nOwnerEnemy and nMyEnemy>=v.nMyEnemy and nRangeEnemy>=v.nRangeEnemy)then
-					if(v.target==2)then
-						SkillObject(myid,v.lv,v.id,myid)
-						Skill[i].count=Skill[i].count+1
-						if(Skill[i].count>=v.times)then
-							Skill[i].count=0
-							Skill[i].stemp=cur_t
-						end
-					elseif(v.target==1 and getObjRectDis(oid,myid)<=GetV(V_SKILLATTACKRANGE_LEVEL,myid,v.id,v.lv))then
-						SkillObject(myid,v.lv,v.id,oid)
-						Skill[i].count=Skill[i].count+1
-						if(Skill[i].count>=v.times)then
-							Skill[i].count=0
-							Skill[i].stemp=cur_t
-						end
-					end
-					break
-				end
-			end
-			if(bestTarget>0 and Mobs[bestTarget][5]>=0)then
-				MyState=ST_ATTACK_PRE
-			end
-		--end
+		-- 常駐技能使用
+		autoUseSkill(myid, oid, oid, 1) --第三個參數原本是怪物id，這邊用 oid
+		if(bestTarget>0 and Mobs[bestTarget][5]>=0)then
+			MyState=ST_ATTACK_PRE
+		end
 		if(MyState==ST_FOLLOW and getObjRectDis(oid,myid)>FollowDis)then
 			local x1,y1=GetV(V_POSITION,oid)
 			local x2,y2=GetV(V_POSITION,myid)
@@ -287,7 +283,7 @@ function AI(myid)
 	elseif (MyState==ST_ATTACK_PRE) then
 		-- 目標消失則回到先前狀態(FOLLOW)
 		if(bestTarget<=0 or Mobs[bestTarget][5]<0)then
-			Target=0
+			RemoveTarget()
 			MyState=ST_FOLLOW
 		else
 			Target=Mobs[bestTarget][1]
@@ -304,21 +300,9 @@ function AI(myid)
 				end
 			else
 				--使用技能
-				local usid,chaseDis=GetAutoSkill(myid)
-				if(usid>0)then
-					local v=Skill[usid]
-					if(v.id==0)then
-						Attack(myid,Target)
-					else
-						SkillObject(myid,v.lv,v.id,(v.target==0) and Target or ((v.target==1) and oid or myid))
-					end
-					v.count=v.count+1
-					if(v.count>=v.times)then
-						v.count=0
-						v.stemp=GetTick()
-					end
-				end
-				if(chaseDis<100 and Target>0 and getObjRectDis(oid,Target)<15)then
+				local chaseDis = autoUseSkill(myid, oid, Target, 2)
+				--靠近以使用更多可能的技能
+				if(chaseDis~=false and Target>0 and getObjRectDis(oid,Target)<15)then
 					local x,y=getFreeObjRectPos(Target,myid,chaseDis,oid)
 					MoveToDest(myid,x,y)
 				end
@@ -328,6 +312,7 @@ function AI(myid)
 	elseif (MyState==ST_ATTACK) then
 		-- 目標消失則回到先前狀態(FOLLOW)
 		if(getObjRectDis(oid,Target)>15 or GetV(V_MOTION,Target)==MOTION_DEAD)then
+			RemoveTarget()
 			MyState=ST_FOLLOW
 		elseif(getObjRectDis(myid,Target)<=AtkDis)then --在範圍內則普攻
 			Attack(myid,Target)
@@ -340,6 +325,7 @@ function AI(myid)
 	elseif (MyState==ST_SKILL) then
 		-- 目標消失則回到先前狀態(FOLLOW)
 		if(getObjRectDis(oid,Target)>15 or GetV(V_MOTION,Target)==MOTION_DEAD)then
+			RemoveTarget()
 			MyState=ST_FOLLOW
 		elseif(getObjRectDis(myid,Target)<=UseSkillDis)then --在範圍內則使用技能
 			SkillObject(myid,UseSkillLv,UseSkill,Target)
@@ -374,4 +360,58 @@ function GetAutoSkill(myid) --從技能列表找出適當的技能 回傳idx及�
 		end
 	end
 	return skill_id,min_r
+end
+
+function autoUseSkill(myId, ownerId, mobId, excludeWhen) --從技能列表使用技能，回傳追擊格數
+	local minRadius = 100
+	local r = {
+		[0] = getObjRectDis(myId, mobId), --sk.target=0 (魔物)
+		[1] = getObjRectDis(myId, ownerId), --sk.target=1 (主人)
+		[2] = 0 --sk.target=2 (生命體/傭兵)
+	}
+	local targets = {
+		[0] = mobId, --sk.target=0 (魔物)
+		[1] = ownerId, --sk.target=1 (主人)
+		[2] = myId --sk.target=2 (生命體/傭兵)
+	}
+	local t = GetTick()
+	local sp = GetV(V_SP, myId) / GetV(V_MAXSP, myId) * 100
+	local usedFlag = false
+	for i, sk in ipairs(Skill) do
+		if sk.when ~= excludeWhen and
+			t - sk.stemp >= sk.delay and
+			sk.sp[1] <= sp and sp <= sk.sp[2] and
+			nOwnerEnemy >= sk.nOwnerEnemy and
+			nMyEnemy >= sk.nMyEnemy and
+			nRangeEnemy >= sk.nRangeEnemy
+		then --符合使用的條件
+			if usedFlag==false and r[sk.target] <= sk.range then --在使用範圍內可使用
+				--使用此技能
+				if sk.id == 0 then
+					Attack(myId, targets[sk.target])
+				elseif sk.castType == 0 then --自身類型
+					SkillObject(myId, sk.lv, sk.id, myId)
+				elseif sk.castType == 1 then --目標類型
+					SkillObject(myId, sk.lv, sk.id, targets[sk.target])
+				elseif sk.castType == 2 then --地面類型
+					local x,y = GetV(V_POSITION, targets[sk.target])
+					SkillGround(myId, sk.lv, sk.id, x, y)
+				end
+				--更新記數
+				usedFlag = true
+				sk.count = sk.count + 1
+				if(sk.count >= sk.times)then
+					sk.count = 0
+					sk.stemp = t
+				end
+			end
+			if mobId > 0 and sk.chase == 1 and r[sk.target] > sk.range and minRadius > sk.range then
+				minRadius = sk.range
+			end
+		end
+	end
+	if minRadius >= 100 then
+		return false
+	end
+	return minRadius
 end
