@@ -8,7 +8,7 @@ ST_ATTACK_PRE=5
 ST_SKILL_GND=6
 --狀態廣域變數
 AITick=-1
-IsInit=false
+InitStatus=0
 MyState=0
 DestX=0
 DestY=0
@@ -147,9 +147,9 @@ function AI(myid)
 	local msg=GetMsg(myid)
 	local rmsg=GetResMsg(myid)
 	local isHomunculus=GetV(V_HOMUNTYPE,myid)~=nil --是否為生命體
-	if(IsInit==false)then
+	if InitStatus==0 then
 		AtkDis=GetV(V_ATTACKRANGE,myid)
-		IsInit=true
+		InitStatus=1
 		local mytype=GetV(V_HOMUNTYPE,myid)
 		if(tb_property_exist(Skill,"id",0)==false)then
 			EnableNormalAttack=false
@@ -166,6 +166,9 @@ function AI(myid)
 				break
 			end
 		end
+		return
+	elseif InitStatus==1 then
+		InitStatus=2
 		for i,sk in ipairs(Skill) do
 			local castType, effectArea
 			if SkillData[sk.id]~=nil then
@@ -199,9 +202,6 @@ function AI(myid)
 				end
 			end
 		end
-		for i,sk in ipairs(Skill) do --Trace 各技能 range 資訊
-			TraceAI("id="..sk.id..", lv="..sk.lv..", range="..sk.range..", V_SKILLATTACKRANGE_LEVEL:"..GetV(V_SKILLATTACKRANGE_LEVEL,myid,sk.id,sk.lv)..", V_SKILLATTACKRANGE:"..GetV(V_SKILLATTACKRANGE,myid,sk.id))
-		end
 	end
 	--傭兵動作狀態更新
 	local mymo=GetV(V_MOTION,myid)
@@ -226,9 +226,6 @@ function AI(myid)
 		end
 		FollowCmdTime=t
 		MyState=ST_FOLLOW
-		--[[for i,v in ipairs(friends)do
-			TraceAI("F["..i.."]="..v)
-		end--]]
 	elseif msg[1]==ATTACK_OBJECT_CMD then
 		MyState=ST_ATTACK
 		Target=msg[2]
