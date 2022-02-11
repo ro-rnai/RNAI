@@ -167,6 +167,25 @@ function AI(myid)
 			end
 		end
 		for i,sk in ipairs(Skill) do
+			local castType, effectArea
+			if SkillData[sk.id]~=nil then
+				local skData = SkillData[sk.id]
+				castType = SkillData[sk.id][1]
+				if SkillData[sk.id][2][sk.lv]~=nil then
+					effectArea = SkillData[sk.id][2][sk.lv]
+				else
+					effectArea = 0
+				end
+			else
+				castType = 1
+				effectArea = 0
+			end
+			if sk["castType"] == nil then
+				sk["castType"] = castType
+			end
+			if sk["effectArea"] == nil then
+				sk["effectArea"] = effectArea
+			end
 			if sk["range"]==nil then
 				if sk.id==0 then
 					sk["range"]=GetV(V_ATTACKRANGE,myid)
