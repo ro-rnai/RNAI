@@ -192,7 +192,8 @@ function AI(myid)
 				elseif sk.target==2 then
 					sk["range"]=100
 				elseif sk.castType==0 then
-					sk["range"] = (sk["effectArea"] - 1) / 2
+					-- 對自身使用的技能中，如果 effectArea 是 0，都當作是 buff 類技能，讓半徑為 14
+					sk["range"] = sk["effectArea"] == 0 and 14 or (sk["effectArea"] - 1) / 2
 				else
 					sk["range"]=GetV(V_SKILLATTACKRANGE_LEVEL,myid,sk.id,sk.lv)
 				end
