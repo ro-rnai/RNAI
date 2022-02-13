@@ -150,10 +150,6 @@ function AI(myid)
 	if InitStatus==0 then
 		AtkDis=GetV(V_ATTACKRANGE,myid)
 		InitStatus=1
-		local mytype=GetV(V_HOMUNTYPE,myid)
-		if(tb_property_exist(Skill,"id",0)==false)then
-			EnableNormalAttack=false
-		end
 		local sepcFilename = getSepcFilename(myid)
 		-- log_var("sepcFilename = ",sepcFilename)
 		if(type(sepcFilename)=="string" and file_exist(sepcFilename))then
@@ -169,8 +165,12 @@ function AI(myid)
 		return
 	elseif InitStatus==1 then
 		InitStatus=2
+		EnableNormalAttack=false
 		for i,sk in ipairs(Skill) do
 			local castType, effectArea
+			if sk.id==0 then
+				EnableNormalAttack=true
+			end
 			if SkillData[sk.id]~=nil then
 				local skData = SkillData[sk.id]
 				castType = SkillData[sk.id][1]
